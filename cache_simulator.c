@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -12,7 +11,7 @@ typedef struct {
     int tag;
     int validity;
     int fifoQueue; //Contém um valor que coloca o endereço em uma posição da fila usando um contador
-    int lruCounter; //Contém um valor que conta a quantidade de hits sobre o endereço
+    int lruMarker; //Contém um valor que conta a quantidade de hits sobre o endereço
 } Cache;
 
 int main(int argc, char* argv[]) {
@@ -59,6 +58,7 @@ int main(int argc, char* argv[]) {
     }
     int tagSize = 32 - offsetSize - indexSize;
     int fifoCounter = 0;
+    int lruCounter = 0;
   
     //Alocação de memória para a cache
     Cache* cache = (Cache*)malloc(nsets * assoc * sizeof(Cache));
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
             cache[i].tag = -1;
             cache[i].validity = 0;
             cache[i].fifoQueue = 0;
-            cache[i].lruCounter = 0;
+            cache[i].lruMarker = 0;
         }
     }
 
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
             cache[i].tag = -1;
             cache[i].validity = 0;
             cache[i].fifoQueue = 0;
-            cache[i].lruCounter = 0;
+            cache[i].lruMarker = 0;
         }
     }
 
@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
             cache[i].tag = -1;
             cache[i].validity = 0;
             cache[i].fifoQueue = 0;
-            cache[i].lruCounter = 0;
+            cache[i].lruMarker = 0;
         }
     }
 
@@ -162,6 +162,7 @@ int main(int argc, char* argv[]) {
         if (nsets == 1){ //Totalmente associativa
             accessCounter++;
             fifoCounter++; //Aumenta para cada acesso à memória como a 'accessCounter'
+            lruCounter++;
             bool accessVerifier = false;
             for (int i = 0; i < assoc; i++){
                 if (cache[i].validity == 0){
@@ -169,14 +170,14 @@ int main(int argc, char* argv[]) {
                     cache[i].offset = offset;
                     cache[i].tag = tag;
                     cache[i].fifoQueue = fifoCounter; //Valor atualizado para todo acesso
-                    cache[i].lruCounter++; //Valor atualizado para todo acesso
+                    cache[i].lruMarker = lruCounter; //Valor atualizado para todo acesso
                     accessVerifier = true;
                     missComp++;
                     break;
                 } else if (cache[i].tag == tag && cache[i].validity == 1){ //Acerto
                     hitCounter++;
                     cache[i].fifoQueue = fifoCounter;
-                    cache[i].lruCounter++;
+                    cache[i].lruMarker = lruCounter;
                     accessVerifier = true;
                     break;
                 }
@@ -203,17 +204,17 @@ int main(int argc, char* argv[]) {
                     accessVerifier = true;
                     missCapa++;
                 } else if (substitution_policy == 'L'){ //Política de substituição 'Least Recently Used'
-                    int j = cache[0].lruCounter, k = 0;
+                    int j = cache[0].lruMarker, k = 0;
                     for (int i = 0; i < assoc; i++){
-                        if (j < cache[i].lruCounter){ //Busca o endereço com o valor 'lruCounter' mais baixo referente ao item menos acessado da memória
+                        if (j < cache[i].lruMarker){ //Busca o endereço com o valor 'lruCounter' mais baixo referente ao item menos acessado da memória
                             k = i;
-                            j = cache[i].lruCounter;
+                            j = cache[i].lruMarker;
                         }
                     }
                     cache[k].validity = 1;
                     cache[k].tag = tag;
                     cache[k].offset = offset;
-                    cache[k].lruCounter = 0; //Seu valor referente à quantidade de acessos é resetado
+                    cache[k].lruMarker = lruCounter;; //Seu valor referente à quantidade de acessos é resetado
                     accessVerifier = true;
                     missCapa++;
                 }
@@ -221,6 +222,8 @@ int main(int argc, char* argv[]) {
         }
         if (assoc != 1 && nsets != 1 ){ // Parcialmente associativa
             accessCounter++;
+            fifoCounter++;
+            lruCounter++;
             bool accessVerifier = false;
             int setIndex = index * assoc;
 
@@ -229,12 +232,16 @@ int main(int argc, char* argv[]) {
                     cache[i].validity = 1;
                     cache[i].offset = offset;
                     cache[i].tag = tag;
+                    cache[i].lruMarker = lruCounter;
+                    cache[i].fifoQueue = fifoCounter;
                     accessVerifier = true;
                     missComp++;
                     break;
                 } else if (cache[i].tag == tag && cache[i].validity == 1) { // Acerto
                     hitCounter++;
                     accessVerifier = true;
+                    cache[i].lruMarker = lruCounter;
+                    cache[i].fifoQueue = fifoCounter;
                     break;
                 }
             }
@@ -252,7 +259,6 @@ int main(int argc, char* argv[]) {
                         cache[k].validity = 1;
                         cache[k].tag = tag;
                         cache[k].offset = offset;
-                        cache[k].fifoQueue = fifoCounter;
                         accessVerifier = true;
                         missConf++;
                     } else if (substitution_policy == 'F'){
@@ -270,17 +276,17 @@ int main(int argc, char* argv[]) {
                         accessVerifier = true;
                         missConf++;
                     } else if (substitution_policy == 'L'){
-                        int j = cache[setIndex].lruCounter;
+                        int j = cache[setIndex].lruMarker;
                         for (int i = setIndex; i < setIndex + assoc; i++){
-                            if (cache[i].lruCounter < j) {
-                                j = cache[i].lruCounter;
+                            if (cache[i].lruMarker < j) {
+                                j = cache[i].lruMarker;
                                 k = i;
                             }
                         }
                         cache[k].validity = 1;
                         cache[k].tag = tag;
                         cache[k].offset = offset;
-                        cache[k].lruCounter = 0;
+                        cache[k].lruMarker = lruCounter;
                         accessVerifier = true;
                         missConf++;
                     }
@@ -311,17 +317,17 @@ int main(int argc, char* argv[]) {
                     accessVerifier = true;
                     missCapa++;
                 } else if (substitution_policy == 'L'){
-                    int j = cache[setIndex].lruCounter;
+                    int j = cache[setIndex].lruMarker;
                     for (int i = setIndex; i < setIndex + assoc; i++){
-                        if (cache[i].lruCounter < j) {
-                            j = cache[i].lruCounter;
+                        if (cache[i].lruMarker < j) {
+                            j = cache[i].lruMarker;
                             k = i;
                         }
                     }
                     cache[k].validity = 1;
                     cache[k].tag = tag;
                     cache[k].offset = offset;
-                    cache[k].lruCounter = 0;
+                    cache[k].lruMarker = lruCounter;
                     accessVerifier = true;
                     missCapa++;
                 }
